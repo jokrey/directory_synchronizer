@@ -173,7 +173,11 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
     let mut assumed_time_of_divergence: Option<SystemTime> = None;
     for d in differences {
         if d.p_source.is_some() && d.p_target.is_some() {
-            assumed_time_of_divergence = Some(assumed_time_of_divergence.unwrap().max(d.pt_modified()));
+            if assumed_time_of_divergence.is_some() {
+                assumed_time_of_divergence = Some(assumed_time_of_divergence.unwrap().max(d.pt_modified()));
+            } else {
+                assumed_time_of_divergence = Some(d.pt_modified());
+            }
         }
     }
     if assumed_time_of_divergence == None {

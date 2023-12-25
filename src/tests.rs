@@ -15,6 +15,37 @@ fn test_new_file_in_source() {
 
     run_synchronization_as_test(&source_path, &target_path, true);
 }
+#[test]
+fn test_file_updated_in_source() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::write(format!("{source_path}/f1"), [5,4,3,2,1]).ok();
+
+    run_synchronization_as_test(&source_path, &target_path, true);
+}
+#[test]
+fn test_file_updated_in_target() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::write(format!("{target_path}/f2"), [5,4,3,2,1]).ok();
+
+    run_synchronization_as_test(&source_path, &target_path, false);
+}
+#[test]
+fn test_file_updated_in_source_and_target() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::write(format!("{source_path}/f1"), [5,4,3,2,1]).ok();
+    fs::write(format!("{target_path}/f2"), [5,4,3,2,1]).ok();
+
+    fs::write(format!("{source_path}/d3/d3d1/d3d1d1/d3d1d1f1"), [5,4,3,2,1]).ok();
+    fs::write(format!("{target_path}/d3/d3d1/d3d1d1/d3d1d1d1/d3d1d1d1f1"), [5,4,3,2,1]).ok();
+    fs::write(format!("{target_path}/d3/d3d1/d3d1d1/d3d1d1f2"), [5,4,3,2,1]).ok();
+    fs::remove_dir_all(format!("{source_path}/d1")).ok();
+    fs::remove_dir_all(format!("{target_path}/d2")).ok();
+
+    run_synchronization_as_test(&source_path, &target_path, false);
+}
 
 #[test]
 fn test_new_empty_directory_in_source() {
