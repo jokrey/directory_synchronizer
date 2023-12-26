@@ -210,7 +210,7 @@ impl Ord for AnnotatedPath {
 ///               that target directory does not contain any files that don't exist in source,\n    \
 ///               but are newer than the last common modification date (assumed time of last synchronization).
 /// Returns list of files that are assumed newer in target directory ("problems").
-pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_source: SystemTime, differences: &LinkedList<Difference>) -> Vec<(Difference, String)> {
+pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_source: SystemTime, differences: &Vec<Difference>) -> Vec<(Difference, String)> {
     let mut problems = Vec::new();
 
     if differences.is_empty() {
@@ -230,9 +230,6 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
     if assumed_time_of_divergence == None {
         assumed_time_of_divergence = Some(most_recent_modified_in_source);
     }
-
-
-    println!("assumed_time_of_divergence: {:?}", assumed_time_of_divergence);
 
     for d in differences {
         if d.p_source.is_some() && d.p_target.is_some() {
@@ -262,18 +259,25 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
 
 
 
-pub(crate) fn find_differences(source_dir: &str, target_dir: &str) -> (SystemTime, LinkedList<Difference>) {
-    let mut collector = LinkedList::new();
+pub(crate) fn find_differences(source_dir: &str, target_dir: &str) -> (SystemTime, Vec<Difference>) {
+    let mut collector = Vec::with_capacity(64);
 
-    let most_recent_modified_in_source = find_differences_rec(Some(source_dir), Some(target_dir), &mut collector);
+    let most_recent_modified_in_source = find_differences_rec(source_dir, target_dir, &mut collector);
 
     return (most_recent_modified_in_source, collector)
 }
 
-fn find_differences_rec(dir1: Option<&str>, dir2: Option<&str>, mut collector: &mut LinkedList<Difference>) -> SystemTime {
+fn find_differences_rec(dir1: &str, dir2: &str, mut collector: &mut Vec<Difference>) -> SystemTime {
     let dir1_set = list_paths(dir1);
     let dir2_set = list_paths(dir2);
     let mut most_recent_modified_in_source = SystemTime::UNIX_EPOCH;
+
+    for f2 in &dir2_set {
+        let f1o = dir1_set.get(f2);
+        if f1o.is_none() {
+            collector.push(Difference { p_source: None, p_target: Some(f2.clone()) });
+        }
+    }
 
     for f1 in &dir1_set {
         if !f1.is_dir() {
@@ -283,22 +287,15 @@ fn find_differences_rec(dir1: Option<&str>, dir2: Option<&str>, mut collector: &
         if f2o.is_some() {
             let f2 = f2o.unwrap();
             if f1.is_dir() && f2.is_dir() {
-                let mrmis = find_differences_rec(Some(&f1.path), Some(&f2.path), collector);
+                let mrmis = find_differences_rec(&f1.path, &f2.path, collector);
                 most_recent_modified_in_source = most_recent_modified_in_source.max(mrmis);
             } else {
                 if f1.is_dir() != f2.is_dir() || f1.modified != f2.modified {
-                    collector.push_back(Difference { p_source: Some(f1.clone()), p_target: f2o.cloned()});
+                    collector.push(Difference { p_source: Some(f1.clone()), p_target: f2o.cloned()});
                 }
             }
         } else {
-            collector.push_back(Difference { p_source: Some(f1.clone()), p_target: None });
-        }
-    }
-
-    for f2 in &dir2_set {
-        let f1o = dir1_set.get(f2);
-        if f1o.is_none() {
-            collector.push_back(Difference { p_source: None, p_target: Some(f2.clone()) });
+            collector.push(Difference { p_source: Some(f1.clone()), p_target: None });
         }
     }
 
@@ -306,22 +303,23 @@ fn find_differences_rec(dir1: Option<&str>, dir2: Option<&str>, mut collector: &
 }
 
 
-fn list_paths(dir: Option<&str>) -> HashSet<AnnotatedPath> {
-    let mut result = HashSet::new();
-    match dir {
-        Some(dir) => {
-            let reader = fs::read_dir(dir).expect("Could not read from directory");
+fn list_paths(dir: &str) -> HashSet<AnnotatedPath> {
+    return match fs::read_dir(dir) {
+        Ok(reader) => {
+            let mut result = HashSet::new();
             for r in reader {
                 let e = r.unwrap();
                 let path = e.path().to_str().unwrap().to_string();
                 let name = e.file_name().to_str().unwrap().to_string();
                 let meta = e.metadata().unwrap();
                 let is_dir = meta.is_dir();
-                let modified = if is_dir {None} else {Some(meta.modified().unwrap())};
-                result.insert(AnnotatedPath {path, name, modified});
+                let modified = if is_dir {
+                    None
+                } else { Some(meta.modified().unwrap()) };
+                result.insert(AnnotatedPath { path, name, modified });
             }
+            result
         }
-        None => {}
+        Err(_) => { HashSet::with_capacity(0) }
     }
-    return result;
 }
