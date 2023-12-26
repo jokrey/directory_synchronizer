@@ -14,27 +14,35 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
             let psu = d.p_source.as_ref().unwrap();
             let from = &psu.path;
             let to = &d.p_target.as_ref().unwrap().path;
-            copy_file_or_dir_with_prints(psu, &from, &to).expect("could not override");
+            println!("Replacing file/directory...:\n    '{from}' -> {to}");
+            let err = copy_file_or_dir_with_prints(psu, &from, &to);
+            match err {
+                Ok(len)        => println!("Successfully replaced file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
+                Err(e) => println!("Error replacing file/directory: \n    '{from}' -> {to}\n    {e}")
+            }
         } else if d.p_source.is_some() && d.p_target.is_none() {
             let psu = d.p_source.as_ref().unwrap();
             let from = &psu.path;
             let to = format!("{}/{}", target_base_path, &from[source_base_path.len()..]);
-            copy_file_or_dir_with_prints(psu, &from, &to).expect("could not copy");
+            println!("Copying file/directory...:\n    '{from}' -> {to}");
+            let err = copy_file_or_dir_with_prints(psu, &from, &to);
+            match err {
+                Ok(len)        => println!("Successfully copied file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
+                Err(e) => println!("Error copied file/directory: \n    '{from}' -> {to}\n    {e}")
+            }
         } else if d.p_source.is_none() && d.p_target.is_some() {
             let ptu = d.p_target.as_ref().unwrap();
             let ptpath = &ptu.path;
             let err = if ptu.is_dir() {
+                println!("Removing directory...: '{ptpath}'");
                 fs::remove_dir_all(&ptpath)
             } else {
+                println!("Removing file...: '{ptpath}'");
                 fs::remove_file(&ptpath)
             };
             match err {
-                Ok(_) => {
-                    println!("Successfully removed file/directory:\n    {ptpath}")
-                }
-                Err(e) => {
-                    println!("Error removing file/directory (already deleted?):\n    {e}\n    {ptpath}")
-                }
+                Ok(_)        => println!("Successfully removed file/directory: ’{ptpath}’"),
+                Err(e) => println!("Error removing file/directory: ’{ptpath}’\n    {e}")
             }
         }
     }
