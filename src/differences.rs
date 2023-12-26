@@ -32,17 +32,17 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
             }
         } else if d.p_source.is_none() && d.p_target.is_some() {
             let ptu = d.p_target.as_ref().unwrap();
-            let ptpath = &ptu.path;
+            let pt_path = &ptu.path;
             let err = if ptu.is_dir() {
-                println!("Removing directory...: '{ptpath}'");
-                fs::remove_dir_all(&ptpath)
+                println!("Removing directory...: '{pt_path}'");
+                fs::remove_dir_all(&pt_path)
             } else {
-                println!("Removing file...: '{ptpath}'");
-                fs::remove_file(&ptpath)
+                println!("Removing file...: '{pt_path}'");
+                fs::remove_file(&pt_path)
             };
             match err {
-                Ok(_)        => println!("Successfully removed file/directory: ’{ptpath}’"),
-                Err(e) => println!("Error removing file/directory: ’{ptpath}’\n    {e}")
+                Ok(_)        => println!("Successfully removed file/directory: ’{pt_path}’"),
+                Err(e) => println!("Error removing file/directory: ’{pt_path}’\n    {e}")
             }
         }
     }
