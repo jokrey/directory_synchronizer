@@ -7,11 +7,6 @@ use filetime::{FileTime, set_file_mtime};
 
 
 pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: &str, target_base_path: &str, diffs: I) where I: Iterator<Item= &'a Difference>+Clone {
-    //must be done, because fs::copy does not create directory...
-    private_apply_diffs_source_to_target_with_prints(&source_base_path, &target_base_path, diffs.clone().filter(|d| {d.is_dir()}));
-    private_apply_diffs_source_to_target_with_prints(&source_base_path, &target_base_path, diffs.clone().filter(|d| {!d.is_dir()}));
-}
-fn private_apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: &str, target_base_path: &str, diffs: I) where I: Iterator<Item= &'a Difference>+Clone {
     for d in diffs {
         if d.p_source.is_some() && d.p_target.is_some() {
             let psu = d.p_source.as_ref().unwrap();
