@@ -67,35 +67,6 @@ fn test_new_full_directory_in_source() {
 }
 
 #[test]
-fn test_file_deleted_in_source() {
-    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
-
-    fs::remove_file(format!("{source_path}/f1")).ok();
-
-    run_synchronization_as_test(&source_path, &target_path, true);
-}
-
-#[test]
-fn test_empty_directory_deleted_in_source() {
-    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
-
-    fs::remove_dir(format!("{source_path}/d3/d3d1/d3d1d1/d3d1d1d1")).ok();
-
-    //technically not a "problem", but undetectable and if in doubt: problem
-    run_synchronization_as_test(&source_path, &target_path, false);
-}
-
-#[test]
-fn test_full_directory_deleted_in_source() {
-    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
-
-    fs::remove_dir_all(format!("{source_path}/d3/")).ok();
-
-    //technically not a "problem", but undetectable and if in doubt: problem
-    run_synchronization_as_test(&source_path, &target_path, false);
-}
-
-#[test]
 fn test_full_directory_deleted_in_target() {
     let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
 
@@ -133,7 +104,50 @@ fn test_new_full_directory_in_target() {
     run_synchronization_as_test(&source_path, &target_path, false);
 }
 
+#[test]
+fn test_file_deleted_in_source_and_other_file_changed() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
 
+    fs::remove_file(format!("{source_path}/f1")).ok();
+    fs::write     (format!("{source_path}/d1/d1f2"), [1]).ok();
+
+    //NOTE: no wrongful problem detection
+    run_synchronization_as_test(&source_path, &target_path, true);
+}
+
+
+
+//Wrongly detected problems::
+#[test]
+fn test_file_deleted_in_source() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::remove_file(format!("{source_path}/f1")).ok();
+
+    //technically not a "problem", but undetectable and if in doubt: problem
+    //if there is even one file modified, this does not get wrongly detected
+    run_synchronization_as_test(&source_path, &target_path, false);
+}
+
+#[test]
+fn test_empty_directory_deleted_in_source() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::remove_dir(format!("{source_path}/d3/d3d1/d3d1d1/d3d1d1d1")).ok();
+
+    //technically not a "problem", but undetectable(no possible way, except rely on dir modification date) and if in doubt: problem
+    run_synchronization_as_test(&source_path, &target_path, false);
+}
+
+#[test]
+fn test_full_directory_deleted_in_source() {
+    let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
+
+    fs::remove_dir_all(format!("{source_path}/d3/")).ok();
+
+    //technically not a "problem", but undetectable(would have to determine directory modification date with search) and if in doubt: problem
+    run_synchronization_as_test(&source_path, &target_path, false);
+}
 
 
 
@@ -173,13 +187,13 @@ fn generate_clean_test_directory(path: &str) -> (String, String) {
 }
 
 fn run_synchronization_as_test(source_path: &str, target_path: &str, problems_assumed_empty: bool) {
-    let (most_recent_modified_in_source, diffs) = find_differences(source_path, target_path);
+    let diffs = find_differences(source_path, target_path);
     println!("diffs: {:?}", diffs);
-    let problems = verify_source_fully_newer_than_target(most_recent_modified_in_source, &diffs);
+    let problems = verify_source_fully_newer_than_target(&diffs);
     println!("problems: {:?}", problems);
     assert_eq!(problems_assumed_empty, problems.is_empty());
     apply_diffs_source_to_target_with_prints(source_path, target_path, diffs.iter());
 
-    let (_, diffs) = find_differences(source_path, target_path);
+    let diffs = find_differences(source_path, target_path);
     assert!(diffs.is_empty());
 }

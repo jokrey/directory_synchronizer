@@ -2,7 +2,6 @@ mod tests;
 mod differences;
 
 use std::{env, fs, io};
-use std::hash::{Hash, Hasher};
 use std::process::exit;
 use differences::verify_source_fully_newer_than_target;
 use crate::differences::apply_diffs_source_to_target_with_prints;
@@ -46,7 +45,7 @@ fn main() {
               that backup directory does not contain any files that don't exist in source,\n    \
               but are newer than the last common modification date (assumed time of last synchronization).");
 
-    let (most_recent_modified_in_source, diffs) = differences::find_differences(&source_path, &target_path);
+    let diffs = differences::find_differences(&source_path, &target_path);
     if diffs.is_empty() {
         println!("Found NO differences. Backup is up-to-date.");
         exit(0);
@@ -56,7 +55,7 @@ fn main() {
         println!("{:?}", d);
     }
 
-    let problems = verify_source_fully_newer_than_target(most_recent_modified_in_source, &diffs);
+    let problems = verify_source_fully_newer_than_target(&diffs);
     if !problems.is_empty() {
         println!("Problems:");
         for p in &problems {

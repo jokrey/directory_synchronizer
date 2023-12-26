@@ -3,12 +3,12 @@ use std::collections::HashSet;
 use std::{fs, io};
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use filetime::{FileTime, set_file_mtime};
 
-
 pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: &str, target_base_path: &str, diffs: I) where I: Iterator<Item= &'a Difference>+Clone {
+    let mut to_buf = PathBuf::new();
     for d in diffs {
         if d.p_source.is_some() && d.p_target.is_some() {
             let psu = d.p_source.as_ref().unwrap();
@@ -23,12 +23,14 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
         } else if d.p_source.is_some() && d.p_target.is_none() {
             let psu = d.p_source.as_ref().unwrap();
             let from = &psu.path;
-            let to = format!("{}/{}", target_base_path, &from[source_base_path.len()..]);
-            println!("Copying file/directory...:\n    '{from}' -> {to}");
-            let err = copy_file_or_dir_with_prints(psu, &from, &to);
+            to_buf.clear();
+            to_buf.push(target_base_path);
+            to_buf.push(&from[source_base_path.len()..]);
+            println!("Copying file/directory...:\n    '{from}' -> {}", to_buf.to_str().unwrap());
+            let err = copy_file_or_dir_with_prints(psu, &from, &to_buf.to_str().unwrap());
             match err {
-                Ok(len)        => println!("Successfully copied file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
-                Err(e) => println!("Error copied file/directory: \n    '{from}' -> {to}\n    {e}")
+                Ok(len) => println!("Successfully copied file/directory: \n    '{from}' -> {}\n    {len} bytes written", to_buf.to_str().unwrap()),
+                Err(e) => println!("Error copied file/directory: \n    '{from}' -> {}\n    {e}", to_buf.to_str().unwrap())
             }
         } else if d.p_source.is_none() && d.p_target.is_some() {
             let ptu = d.p_target.as_ref().unwrap();
@@ -61,12 +63,15 @@ fn copy_file_or_dir_with_prints(psu: &AnnotatedPath, from: &str, to: &str)-> io:
             }
         }
 
+        let mut target_path = PathBuf::new();
         for entry in walkdir::WalkDir::new(&from)
             .min_depth(1)
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            let target_path = format!("{}/{}", to, &entry.path().to_str().unwrap()[from.len()..]);
+            target_path.clear();
+            target_path.push(to);
+            target_path.push(entry.path().strip_prefix(from).unwrap());
 
             let source_metadata = match entry.metadata() {
                 Ok(md) => {md}
@@ -210,25 +215,22 @@ impl Ord for AnnotatedPath {
 ///               that target directory does not contain any files that don't exist in source,\n    \
 ///               but are newer than the last common modification date (assumed time of last synchronization).
 /// Returns list of files that are assumed newer in target directory ("problems").
-pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_source: SystemTime, differences: &Vec<Difference>) -> Vec<(Difference, String)> {
+pub(crate) fn verify_source_fully_newer_than_target(differences: &Vec<Difference>) -> Vec<(Difference, String)> {
     let mut problems = Vec::new();
 
     if differences.is_empty() {
         return problems;
     }
 
-    let mut assumed_time_of_divergence: Option<SystemTime> = None;
+    let mut assumed_time_of_divergence = SystemTime::UNIX_EPOCH;
     for d in differences {
+        if d.is_dir() {continue}
         if d.p_source.is_some() && d.p_target.is_some() {
-            if assumed_time_of_divergence.is_some() {
-                assumed_time_of_divergence = Some(assumed_time_of_divergence.unwrap().max(d.pt_modified()));
-            } else {
-                assumed_time_of_divergence = Some(d.pt_modified());
-            }
+            assumed_time_of_divergence = assumed_time_of_divergence.max(d.ps_modified());
+        } else if d.p_source.is_none() && d.p_target.is_some() {
+            //decision: is file new in target (problem) or deleted in source (no problem)
+            //cannot be decided...
         }
-    }
-    if assumed_time_of_divergence == None {
-        assumed_time_of_divergence = Some(most_recent_modified_in_source);
     }
 
     for d in differences {
@@ -245,10 +247,10 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
                 str.push_str(d.pt_path());
                 str.push_str("' exists in backup directory, but NOT in source directory.");
                 problems.push((d.clone(), str));
-            } else if d.pt_modified() >= assumed_time_of_divergence.unwrap() {
+            } else if d.pt_modified() >= assumed_time_of_divergence {
                 let mut str = "File '".to_string();
                 str.push_str(d.pt_path());
-                str.push_str("' ADDED after last backup in backup directory.");
+                str.push_str("' exists in backup directory, but NOT in source directory and cannot be verified to be old.");
                 problems.push((d.clone(), str));
             }
         }
@@ -259,18 +261,17 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
 
 
 
-pub(crate) fn find_differences(source_dir: &str, target_dir: &str) -> (SystemTime, Vec<Difference>) {
+pub(crate) fn find_differences(source_dir: &str, target_dir: &str) -> Vec<Difference> {
     let mut collector = Vec::with_capacity(64);
 
-    let most_recent_modified_in_source = find_differences_rec(source_dir, target_dir, &mut collector);
+    find_differences_rec(source_dir, target_dir, &mut collector);
 
-    return (most_recent_modified_in_source, collector)
+    return collector
 }
 
-fn find_differences_rec(dir1: &str, dir2: &str, collector: &mut Vec<Difference>) -> SystemTime {
+fn find_differences_rec(dir1: &str, dir2: &str, collector: &mut Vec<Difference>) {
     let dir1_set = list_paths(dir1);
     let dir2_set = list_paths(dir2);
-    let mut most_recent_modified_in_source = SystemTime::UNIX_EPOCH;
 
     for f2 in &dir2_set {
         let f1o = dir1_set.get(f2);
@@ -280,15 +281,11 @@ fn find_differences_rec(dir1: &str, dir2: &str, collector: &mut Vec<Difference>)
     }
 
     for f1 in &dir1_set {
-        if !f1.is_dir() {
-            most_recent_modified_in_source = most_recent_modified_in_source.max(f1.modified());
-        }
         let f2o = dir2_set.get(f1);
         if f2o.is_some() {
             let f2 = f2o.unwrap();
             if f1.is_dir() && f2.is_dir() {
-                let mrmis = find_differences_rec(&f1.path, &f2.path, collector);
-                most_recent_modified_in_source = most_recent_modified_in_source.max(mrmis);
+                find_differences_rec(&f1.path, &f2.path, collector);
             } else {
                 if f1.is_dir() != f2.is_dir() || f1.modified != f2.modified {
                     collector.push(Difference { p_source: Some(f1.clone()), p_target: f2o.cloned()});
@@ -298,8 +295,6 @@ fn find_differences_rec(dir1: &str, dir2: &str, collector: &mut Vec<Difference>)
             collector.push(Difference { p_source: Some(f1.clone()), p_target: None });
         }
     }
-
-    return most_recent_modified_in_source
 }
 
 
@@ -315,7 +310,9 @@ fn list_paths(dir: &str) -> HashSet<AnnotatedPath> {
                 let is_dir = meta.is_dir();
                 let modified = if is_dir {
                     None
-                } else { Some(meta.modified().unwrap()) };
+                } else {
+                    Some(meta.modified().unwrap())
+                };
                 result.insert(AnnotatedPath { path, name, modified });
             }
             result
