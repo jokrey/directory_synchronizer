@@ -1,11 +1,8 @@
-use std::collections::HashSet;
-use std::{fs, thread};
-use std::time::{Duration, SystemTime};
-use filetime::{FileTime, set_file_mtime};
+use std::fs;
 use differences::find_differences;
 use rand::random;
 use crate::differences;
-use crate::differences::{apply_diffs_source_to_target_with_prints, Difference, verify_source_fully_newer_than_target};
+use crate::differences::{apply_diffs_source_to_target_with_prints, verify_source_fully_newer_than_target};
 
 #[test]
 fn test_new_file_in_source() {

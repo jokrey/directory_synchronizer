@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{HashSet, LinkedList};
+use std::collections::HashSet;
 use std::{fs, io};
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;

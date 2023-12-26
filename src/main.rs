@@ -5,7 +5,7 @@ use std::{env, fs, io};
 use std::hash::{Hash, Hasher};
 use std::process::exit;
 use differences::verify_source_fully_newer_than_target;
-use crate::differences::{apply_diffs_source_to_target_with_prints, Difference};
+use crate::differences::apply_diffs_source_to_target_with_prints;
 
 fn main() {
     let mut args: Vec<String> = env::args().collect();
