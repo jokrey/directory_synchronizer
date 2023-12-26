@@ -149,24 +149,24 @@ impl Difference {
             panic!("both are none")
         }
     }
-    pub fn max_modified(&self) -> Option<SystemTime> {
-        return if self.p_source.is_some() && self.p_target.is_some() && !self.p_source.as_ref().unwrap().is_dir() && !self.p_target.as_ref().unwrap().is_dir() {
-            Some(self.ps_modified().max(self.pt_modified()))
-        } else if self.p_source.is_some() && !self.p_source.as_ref().unwrap().is_dir() {
-            Some(self.ps_modified())
-        } else if self.p_target.is_some() && !self.p_target.as_ref().unwrap().is_dir() {
-            Some(self.pt_modified())
-        } else {
-            None
-        }
-    }
+    // pub fn max_modified(&self) -> Option<SystemTime> {
+    //     return if self.p_source.is_some() && self.p_target.is_some() && !self.p_source.as_ref().unwrap().is_dir() && !self.p_target.as_ref().unwrap().is_dir() {
+    //         Some(self.ps_modified().max(self.pt_modified()))
+    //     } else if self.p_source.is_some() && !self.p_source.as_ref().unwrap().is_dir() {
+    //         Some(self.ps_modified())
+    //     } else if self.p_target.is_some() && !self.p_target.as_ref().unwrap().is_dir() {
+    //         Some(self.pt_modified())
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
 
 
 
 #[derive(Debug, Clone)]
-struct AnnotatedPath {
+pub(crate) struct AnnotatedPath {
     pub(crate) path: String,
     name: String,
     modified: Option<SystemTime>
@@ -267,7 +267,7 @@ pub(crate) fn find_differences(source_dir: &str, target_dir: &str) -> (SystemTim
     return (most_recent_modified_in_source, collector)
 }
 
-fn find_differences_rec(dir1: &str, dir2: &str, mut collector: &mut Vec<Difference>) -> SystemTime {
+fn find_differences_rec(dir1: &str, dir2: &str, collector: &mut Vec<Difference>) -> SystemTime {
     let dir1_set = list_paths(dir1);
     let dir2_set = list_paths(dir2);
     let mut most_recent_modified_in_source = SystemTime::UNIX_EPOCH;
