@@ -1,7 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::{HashSet, LinkedList};
-use std::fs;
+use std::{fs, io};
 use std::hash::{Hash, Hasher};
+use std::io::ErrorKind;
+use std::path::Path;
 use std::time::SystemTime;
 use filetime::{FileTime, set_file_mtime};
 
@@ -12,12 +14,12 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
             let psu = d.p_source.as_ref().unwrap();
             let from = &psu.path;
             let to = &d.p_target.as_ref().unwrap().path;
-            copy_file_or_dir_with_prints(psu, &from, &to);
+            copy_file_or_dir_with_prints(psu, &from, &to).expect("could not override");
         } else if d.p_source.is_some() && d.p_target.is_none() {
             let psu = d.p_source.as_ref().unwrap();
             let from = &psu.path;
             let to = format!("{}/{}", target_base_path, &from[source_base_path.len()..]);
-            copy_file_or_dir_with_prints(psu, &from, &to);
+            copy_file_or_dir_with_prints(psu, &from, &to).expect("could not copy");
         } else if d.p_source.is_none() && d.p_target.is_some() {
             let ptu = d.p_target.as_ref().unwrap();
             let ptpath = &ptu.path;
@@ -38,28 +40,70 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
     }
 }
 
-fn copy_file_or_dir_with_prints(psu: &AnnotatedPath, from: &str, to: &str) {
-    if psu.is_dir() {
+fn copy_file_or_dir_with_prints(psu: &AnnotatedPath, from: &str, to: &str)-> io::Result<u64> {
+    return if psu.is_dir() {
+        let mut byte_counter = 0u64;
         match fs::create_dir(&to) {
-            Ok(_) => {
-                println!("Successfully copied directory.\n    {from} -> {to}");
-            }
+            Ok(_) => {}
             Err(e) => {
-                println!("Error copying directory:\n    {e}\n    {from} -> {to}")
+                match e.kind() {
+                    ErrorKind::AlreadyExists => {}
+                    _ => {return Err(e);}
+                }
             }
         }
+
+        for entry in walkdir::WalkDir::new(&from)
+            .min_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let target_path = format!("{}/{}", to, &entry.path().to_str().unwrap()[from.len()..]);
+
+            let source_metadata = match entry.metadata() {
+                Ok(md) => {md}
+                Err(e) => { return Err(io::Error::from(e)); }
+            };
+
+            if source_metadata.is_dir() {
+                match fs::create_dir(&target_path) {
+                    Ok(_) => {}
+                    Err(e) => { return Err(e); }
+                };
+                match fs::set_permissions(&target_path, source_metadata.permissions()) {
+                    Ok(_) => {}
+                    Err(e) => { return Err(e); }
+                }
+            } else {
+                let source_modified = match source_metadata.modified() {
+                    Ok(m) => { m }
+                    Err(e) => { return Err(e); }
+                };
+
+                match copy_file_update_time(source_modified, entry.path(), &target_path) {
+                    Ok(bytes) => { byte_counter += bytes; }
+                    Err(e) => { return Err(e); }
+                };
+            }
+        }
+        Ok(byte_counter)
     } else {
-        match fs::copy(&from, &to) {
-            Ok(bytes) => {
-                println!("Successfully wrote {bytes} bytes.\n    {from} -> {to}");
-                set_file_mtime(&to, FileTime::from(psu.modified())).unwrap();
-            }
-            Err(e) => {
-                println!("Error copying file:\n    {e}\n    {from} -> {to}")
-            }
-        }
+        return copy_file_update_time(psu.modified(), from, to);
     }
 }
+fn copy_file_update_time<P: AsRef<Path>, Q: AsRef<Path>>(from_modified: SystemTime, from: P, to: Q) -> io::Result<u64> {
+    return match fs::copy(&from, &to) {
+        Ok(bytes) => {
+            match set_file_mtime(&to, FileTime::from(from_modified)) {
+                Ok(_) => {}
+                Err(e) => { return Err(e); }
+            }
+            Ok(bytes)
+        }
+        Err(e) => { Err(e) }
+    };
+}
+
 
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -184,15 +228,20 @@ pub(crate) fn verify_source_fully_newer_than_target(most_recent_modified_in_sour
 
     for d in differences {
         if d.p_source.is_some() && d.p_target.is_some() {
-            if d.pt_modified() > d.ps_modified() {
+            if !d.is_dir() && d.pt_modified() > d.ps_modified() {
                 let mut str = "Path '".to_string();
                 str.push_str(d.pt_path());
                 str.push_str("' NEWER in backup directory.");
                 problems.push((d.clone(), str));
             }
         } else if d.p_source.is_none() && d.p_target.is_some() {
-            if !d.is_dir() && d.pt_modified() >= assumed_time_of_divergence.unwrap() {
-                let mut str = "Path '".to_string();
+            if d.is_dir() {
+                let mut str = "Directory '".to_string();
+                str.push_str(d.pt_path());
+                str.push_str("' exists in backup directory, but NOT in source directory.");
+                problems.push((d.clone(), str));
+            } else if d.pt_modified() >= assumed_time_of_divergence.unwrap() {
+                let mut str = "File '".to_string();
                 str.push_str(d.pt_path());
                 str.push_str("' ADDED after last backup in backup directory.");
                 problems.push((d.clone(), str));
@@ -228,35 +277,20 @@ fn find_differences_rec(dir1: Option<&str>, dir2: Option<&str>, mut collector: &
             if f1.is_dir() && f2.is_dir() {
                 let mrmis = find_differences_rec(Some(&f1.path), Some(&f2.path), collector);
                 most_recent_modified_in_source = most_recent_modified_in_source.max(mrmis);
-                if f1.is_dir() != f2.is_dir() || f1.modified != f2.modified {
-                    collector.push_front(Difference { p_source: Some(f1.clone()), p_target: f2o.cloned()});
-                }
             } else {
                 if f1.is_dir() != f2.is_dir() || f1.modified != f2.modified {
                     collector.push_back(Difference { p_source: Some(f1.clone()), p_target: f2o.cloned()});
                 }
             }
         } else {
-            if f1.is_dir() {
-                let mrmis = find_differences_rec(Some(&f1.path), None, collector);
-                most_recent_modified_in_source = most_recent_modified_in_source.max(mrmis);
-                collector.push_front(Difference { p_source: Some(f1.clone()), p_target: None });
-            } else {
-                collector.push_back(Difference { p_source: Some(f1.clone()), p_target: None });
-            }
+            collector.push_back(Difference { p_source: Some(f1.clone()), p_target: None });
         }
     }
 
     for f2 in &dir2_set {
         let f1o = dir1_set.get(f2);
         if f1o.is_none() {
-            if f2.is_dir() {
-                let mrmis = find_differences_rec(None, Some(&f2.path), collector);
-                most_recent_modified_in_source = most_recent_modified_in_source.max(mrmis);
-                collector.push_front(Difference { p_source: None, p_target: Some(f2.clone()) });
-            } else {
-                collector.push_back(Difference { p_source: None, p_target: Some(f2.clone()) });
-            }
+            collector.push_back(Difference { p_source: None, p_target: Some(f2.clone()) });
         }
     }
 

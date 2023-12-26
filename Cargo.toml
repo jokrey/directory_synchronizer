@@ -9,4 +9,6 @@ edition = "2021"
 [dependencies]
 jokrey_utilities = { path = "../jokrey_utilities" }
 filetime = "0.2.23"
-rand = "0.4.6"
+rand = "0.8.5"
+walkdir = "2.4.0"
+log = "0.4.20"

@@ -32,7 +32,7 @@ fn test_file_updated_in_target() {
     run_synchronization_as_test(&source_path, &target_path, false);
 }
 #[test]
-fn test_file_updated_in_source_and_target() {
+fn test_stuff_updated_in_source_and_target() {
     let (source_path, target_path) = generate_clean_test_directory("test-env-dirs");
 
     fs::write(format!("{source_path}/f1"), [5,4,3,2,1]).ok();
@@ -84,7 +84,8 @@ fn test_empty_directory_deleted_in_source() {
 
     fs::remove_dir(format!("{source_path}/d3/d3d1/d3d1d1/d3d1d1d1")).ok();
 
-    run_synchronization_as_test(&source_path, &target_path, true);
+    //technically not a "problem", but undetectable and if in doubt: problem
+    run_synchronization_as_test(&source_path, &target_path, false);
 }
 
 #[test]
@@ -93,7 +94,8 @@ fn test_full_directory_deleted_in_source() {
 
     fs::remove_dir_all(format!("{source_path}/d3/")).ok();
 
-    run_synchronization_as_test(&source_path, &target_path, true);
+    //technically not a "problem", but undetectable and if in doubt: problem
+    run_synchronization_as_test(&source_path, &target_path, false);
 }
 
 #[test]
@@ -120,10 +122,7 @@ fn test_new_empty_directory_in_target() {
 
     fs::create_dir(format!("{target_path}/d4")).ok();
 
-    //NOTE:: this should technically be seen as a problem in target, but we cannot reliably detect this.
-    //NOTE:: therefore problems will not show up as anything, which is ok for an empty directory (which will be overriden)
-    //NOTE:: we do detect non empty directories and new files in target as problems
-    run_synchronization_as_test(&source_path, &target_path, true);
+    run_synchronization_as_test(&source_path, &target_path, false);
 }
 
 #[test]
