@@ -7,7 +7,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jokrey_utilities = { path = "../jokrey_utilities" }
 filetime = "0.2.23"
 rand = "0.8.5"
 walkdir = "2.4.0"
