@@ -52,14 +52,28 @@ fn main() {
     }
     println!("Differences:");
     for d in &diffs {
-        println!("{:?}", d);
+        let file_name = d.file_name();
+        if d.p_source.is_some() && d.p_target.is_some() {
+            //always a file
+            println!("MODIFIED ({}): {}[{}]", if d.p_source.as_ref().unwrap().modified() > d.p_target.as_ref().unwrap().modified() {"source is newer"} else {"backup is newer"}, if d.is_dir() {"DIR"} else {"FILE"}, file_name);
+            let directory_path = &d.p_source.as_ref().unwrap().path[source_path.len()..d.p_source.as_ref().unwrap().path.len()-file_name.len()];
+            println!("    in directory: {}", directory_path);
+        } else if d.p_source.is_some() && d.p_target.is_none() {
+            println!("NEW in source (or deleted in backup): {}[{}]", if d.is_dir() {"DIR"} else {"FILE"}, file_name);
+            let directory_path = &d.p_source.as_ref().unwrap().path[source_path.len()..d.p_source.as_ref().unwrap().path.len()-file_name.len()];
+            println!("    in directory: {}", directory_path);
+        } else if d.p_source.is_none() && d.p_target.is_some() {
+            println!("DELETED in source (or new in backup): {}[{}]", if d.is_dir() {"DIR"} else {"FILE"}, file_name);
+            let directory_path = &d.p_target.as_ref().unwrap().path[source_path.len()..d.p_target.as_ref().unwrap().path.len()-file_name.len()];
+            println!("    in directory: {}", directory_path);
+        }
     }
 
     let problems = verify_source_fully_newer_than_target(&diffs);
     if !problems.is_empty() {
         println!("Problems:");
-        for p in &problems {
-            println!("{:?}", p.1);
+        for (d, desc) in &problems {
+            println!("{desc}");
         }
     }
 

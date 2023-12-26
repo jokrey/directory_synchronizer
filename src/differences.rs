@@ -151,7 +151,19 @@ impl Difference {
         } else if self.p_source.is_none() && self.p_target.is_some() {
             return self.p_target.as_ref().unwrap().is_dir()
         } else {
-            panic!("both are none")
+            panic!("both are none, never happens, bug")
+        }
+    }
+    pub(crate) fn file_name(&self) -> &str {
+        if self.p_source.is_some() /*&& self.p_target.is_some()*/ {
+            //filename of both always the same
+            return &*self.p_source.as_ref().unwrap().name;
+            // } else if self.p_source.is_some() && self.p_target.is_none() {
+            //     return &*self.p_source.as_ref().unwrap().name;
+        } else if self.p_source.is_none() && self.p_target.is_some() {
+            return &*self.p_target.as_ref().unwrap().name;
+        } else {
+            panic!("both are none, never happens, bug")
         }
     }
     // pub fn max_modified(&self) -> Option<SystemTime> {
