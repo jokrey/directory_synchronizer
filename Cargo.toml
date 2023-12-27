@@ -1,8 +1,9 @@
 [package]
 name = "directory_synchronizer"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["jokrey"]
 edition = "2021"
+resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,3 +12,4 @@ filetime = "0.2.23"
 rand = "0.8.5"
 walkdir = "2.4.0"
 log = "0.4.20"
+iced = "0.10.0"

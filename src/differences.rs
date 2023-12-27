@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{fs, io};
 use std::hash::{Hash, Hasher};
 use std::io::ErrorKind;
@@ -17,7 +17,7 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
             println!("Replacing file/directory...:\n    '{from}' -> {to}");
             let err = copy_file_or_dir_with_prints(psu, &from, &to);
             match err {
-                Ok(len)        => println!("Successfully replaced file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
+                Ok(len) => println!("Successfully replaced file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
                 Err(e) => println!("Error replacing file/directory: \n    '{from}' -> {to}\n    {e}")
             }
         } else if d.p_source.is_some() && d.p_target.is_none() {
@@ -25,7 +25,7 @@ pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: 
             let from = &psu.path;
             to_buf.clear();
             to_buf.push(target_base_path);
-            to_buf.push(&from[source_base_path.len()..]);
+            to_buf.push(&from[source_base_path.len() + if source_base_path.starts_with("/") {1} else {1}..]);
             println!("Copying file/directory...:\n    '{from}' -> {}", to_buf.to_str().unwrap());
             let err = copy_file_or_dir_with_prints(psu, &from, &to_buf.to_str().unwrap());
             match err {
@@ -123,6 +123,42 @@ fn copy_file_update_time<P: AsRef<Path>, Q: AsRef<Path>>(from_modified: SystemTi
 pub(crate) struct Difference {
     pub(crate) p_source: Option<AnnotatedPath>,
     pub(crate) p_target: Option<AnnotatedPath>
+}
+
+impl Difference {
+    pub(crate) fn describe(&self) -> String {
+        let file_name = self.file_name();
+
+        if self.p_source.is_some() && self.p_target.is_some() {
+            //always a file
+            return format!("MODIFIED ({}): {}[{}]", if self.p_source.as_ref().unwrap().modified() > self.p_target.as_ref().unwrap().modified() { "source is newer" } else { "backup is newer" }, if self.is_dir() { "DIR" } else { "FILE" }, file_name)
+        } else if self.p_source.is_some() && self.p_target.is_none() {
+            return format!("NEW in source (or deleted in backup): {}[{}]", if self.is_dir() { "DIR" } else { "FILE" }, file_name);
+        } else if self.p_source.is_none() && self.p_target.is_some() {
+            return format!("DELETED in source (or new in backup): {}[{}]", if self.is_dir() { "DIR" } else { "FILE" }, file_name);
+        } else {
+            panic!("impossible, this is a bug")
+        }
+    }
+    pub(crate) fn describe_short(&self) -> String {
+        let file_name = self.file_name();
+
+        if self.p_source.is_some() && self.p_target.is_some() {
+            //always a file
+            return format!("MODIFIED ({}): {}[\"{}\"]", if self.p_source.as_ref().unwrap().modified() > self.p_target.as_ref().unwrap().modified() { "source new" } else { "backup new" }, if self.is_dir() { "DIR" } else { "FILE" }, file_name)
+        } else if self.p_source.is_some() && self.p_target.is_none() {
+            return format!("NEW: {}[\"{}\"]", if self.is_dir() { "DIR" } else { "FILE" }, file_name);
+        } else if self.p_source.is_none() && self.p_target.is_some() {
+            return format!("DELETED: {}[\"{}\"]", if self.is_dir() { "DIR" } else { "FILE" }, file_name);
+        } else {
+            panic!("impossible, this is a bug")
+        }
+    }
+
+    pub(crate) fn get_directory_path(&self, source_path_len: usize, target_path_len: usize) -> &str {
+        let some_full_path = &(if self.p_source.is_some() {&self.p_source} else {&self.p_target}.as_ref().unwrap()).path;
+        return &some_full_path[if self.p_source.is_some() { source_path_len } else { target_path_len }..some_full_path.len() - self.file_name().len()];
+    }
 }
 
 impl Difference {
@@ -227,8 +263,8 @@ impl Ord for AnnotatedPath {
 ///               that target directory does not contain any files that don't exist in source,\n    \
 ///               but are newer than the last common modification date (assumed time of last synchronization).
 /// Returns list of files that are assumed newer in target directory ("problems").
-pub(crate) fn verify_source_fully_newer_than_target(differences: &Vec<Difference>) -> Vec<(Difference, String)> {
-    let mut problems = Vec::new();
+pub(crate) fn verify_source_fully_newer_than_target(differences: &Vec<Difference>) -> HashMap<Difference, String> {
+    let mut problems = HashMap::new();
 
     if differences.is_empty() {
         return problems;
@@ -248,22 +284,13 @@ pub(crate) fn verify_source_fully_newer_than_target(differences: &Vec<Difference
     for d in differences {
         if d.p_source.is_some() && d.p_target.is_some() {
             if !d.is_dir() && d.pt_modified() > d.ps_modified() {
-                let mut str = "Path '".to_string();
-                str.push_str(d.pt_path());
-                str.push_str("' NEWER in backup directory.");
-                problems.push((d.clone(), str));
+                problems.insert(d.clone(), "NEWER in backup directory".to_string());
             }
         } else if d.p_source.is_none() && d.p_target.is_some() {
             if d.is_dir() {
-                let mut str = "Directory '".to_string();
-                str.push_str(d.pt_path());
-                str.push_str("' exists in backup directory, but NOT in source directory.");
-                problems.push((d.clone(), str));
+                problems.insert(d.clone(), "Directory exists in backup directory, but NOT in source directory.".to_string());
             } else if d.pt_modified() >= assumed_time_of_divergence {
-                let mut str = "File '".to_string();
-                str.push_str(d.pt_path());
-                str.push_str("' exists in backup directory, but NOT in source directory and cannot be verified to be old.");
-                problems.push((d.clone(), str));
+                problems.insert(d.clone(), "File exists in backup directory, but NOT in source directory and cannot be verified to be old.".to_string());
             }
         }
     }
