@@ -9,10 +9,11 @@ use crate::differences::apply_diffs_source_to_target_with_prints;
 use crate::ui::start_synchronization_ui;
 
 fn main() {
-    let mut args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
-    // args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "cmd".to_string()]);
-    // args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "ui".to_string()]);
+    //let args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "cmd".to_string()]);
+    //let args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "ui".to_string()]);
+    //let args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "just-do-it".to_string()]);
 
     if args.len() == 4 && fs::metadata(&args[1]).is_ok_and(|m| m.is_dir()) && fs::metadata(&args[2]).is_ok_and(|m| m.is_dir()) {
         println!("Source Path: \"{}\"", args[1]);
@@ -26,15 +27,24 @@ fn main() {
                 analyze_and_synchronize_with_dialogue(&args[1], &args[2]);
                 return
             }
+            "justdoit" => {
+                analyze_and_synchronize_with_dialogue(&args[1], &args[2]);
+                return
+            }
             &_ => {}
         }
     }
 
     println!("Invalid arguments (received {}, expected 2).", args.len() - 1);
     println!("Excepted argument structure:");
-    println!("[\"DIR[source-path]\", \"DIR[backup-path]\"] ui/cmd");
+    println!("[\"DIR[source-path]\", \"DIR[backup-path]\"] ui/cmd/just-do-it");
     println!("Received argument structure:");
     println!("{:?}", &args[1..]);
+    println!("\n::HELP::");
+    println!("ui: Will start a UI where each differences to be applies can be selected");
+    println!("ui: Will start a command line where each differences and problem is shown and a decision can be made to apply or not");
+    println!("just-do-it: Will synchronize the backup directory to the current state of the source directory");
+    println!("Program will NEVER change ANY file in source directory (\"{}\")", args[1]);
     println!("Try again. Exiting...");
 }
 
