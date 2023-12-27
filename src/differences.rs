@@ -10,42 +10,46 @@ use filetime::{FileTime, set_file_mtime};
 pub(crate) fn apply_diffs_source_to_target_with_prints<'a, I>(source_base_path: &str, target_base_path: &str, diffs: I) where I: Iterator<Item= &'a Difference>+Clone {
     let mut to_buf = PathBuf::new();
     for d in diffs {
-        if d.p_source.is_some() && d.p_target.is_some() {
-            let psu = d.p_source.as_ref().unwrap();
-            let from = &psu.path;
-            let to = &d.p_target.as_ref().unwrap().path;
-            println!("Replacing file/directory...:\n    '{from}' -> {to}");
-            let err = copy_file_or_dir_with_prints(psu, &from, &to);
-            match err {
-                Ok(len) => println!("Successfully replaced file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
-                Err(e) => println!("Error replacing file/directory: \n    '{from}' -> {to}\n    {e}")
-            }
-        } else if d.p_source.is_some() && d.p_target.is_none() {
-            let psu = d.p_source.as_ref().unwrap();
-            let from = &psu.path;
-            to_buf.clear();
-            to_buf.push(target_base_path);
-            to_buf.push(&from[source_base_path.len() + if source_base_path.starts_with("/") {1} else {1}..]);
-            println!("Copying file/directory...:\n    '{from}' -> {}", to_buf.to_str().unwrap());
-            let err = copy_file_or_dir_with_prints(psu, &from, &to_buf.to_str().unwrap());
-            match err {
-                Ok(len) => println!("Successfully copied file/directory: \n    '{from}' -> {}\n    {len} bytes written", to_buf.to_str().unwrap()),
-                Err(e) => println!("Error copied file/directory: \n    '{from}' -> {}\n    {e}", to_buf.to_str().unwrap())
-            }
-        } else if d.p_source.is_none() && d.p_target.is_some() {
-            let ptu = d.p_target.as_ref().unwrap();
-            let pt_path = &ptu.path;
-            let err = if ptu.is_dir() {
-                println!("Removing directory...: '{pt_path}'");
-                fs::remove_dir_all(&pt_path)
-            } else {
-                println!("Removing file...: '{pt_path}'");
-                fs::remove_file(&pt_path)
-            };
-            match err {
-                Ok(_)        => println!("Successfully removed file/directory: ’{pt_path}’"),
-                Err(e) => println!("Error removing file/directory: ’{pt_path}’\n    {e}")
-            }
+        apply_diff(&source_base_path, target_base_path, d, &mut to_buf);
+    }
+}
+
+fn apply_diff(source_base_path: &&str, target_base_path: &str, d: &Difference, to_buf: &mut PathBuf) {
+    if d.p_source.is_some() && d.p_target.is_some() {
+        let psu = d.p_source.as_ref().unwrap();
+        let from = &psu.path;
+        let to = &d.p_target.as_ref().unwrap().path;
+        println!("Replacing file/directory...:\n    '{from}' -> {to}");
+        let err = copy_file_or_dir_with_prints(psu, &from, &to);
+        match err {
+            Ok(len) => println!("Successfully replaced file/directory: \n    '{from}' -> {to}\n    {len} bytes written"),
+            Err(e) => println!("Error replacing file/directory: \n    '{from}' -> {to}\n    {e}")
+        }
+    } else if d.p_source.is_some() && d.p_target.is_none() {
+        let psu = d.p_source.as_ref().unwrap();
+        let from = &psu.path;
+        to_buf.clear();
+        to_buf.push(target_base_path);
+        to_buf.push(&from[source_base_path.len() + if source_base_path.starts_with("/") { 1 } else { 1 }..]);
+        println!("Copying file/directory...:\n    '{from}' -> {}", to_buf.to_str().unwrap());
+        let err = copy_file_or_dir_with_prints(psu, &from, &to_buf.to_str().unwrap());
+        match err {
+            Ok(len) => println!("Successfully copied file/directory: \n    '{from}' -> {}\n    {len} bytes written", to_buf.to_str().unwrap()),
+            Err(e) => println!("Error copied file/directory: \n    '{from}' -> {}\n    {e}", to_buf.to_str().unwrap())
+        }
+    } else if d.p_source.is_none() && d.p_target.is_some() {
+        let ptu = d.p_target.as_ref().unwrap();
+        let pt_path = &ptu.path;
+        let err = if ptu.is_dir() {
+            println!("Removing directory...: '{pt_path}'");
+            fs::remove_dir_all(&pt_path)
+        } else {
+            println!("Removing file...: '{pt_path}'");
+            fs::remove_file(&pt_path)
+        };
+        match err {
+            Ok(_) => println!("Successfully removed file/directory: ’{pt_path}’"),
+            Err(e) => println!("Error removing file/directory: ’{pt_path}’\n    {e}")
         }
     }
 }
