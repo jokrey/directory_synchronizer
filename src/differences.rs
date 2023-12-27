@@ -30,7 +30,7 @@ fn apply_diff(source_base_path: &&str, target_base_path: &str, d: &Difference, t
         let from = &psu.path;
         to_buf.clear();
         to_buf.push(target_base_path);
-        to_buf.push(&from[source_base_path.len() + if source_base_path.starts_with("/") { 1 } else { 1 }..]);
+        to_buf.push(&from[source_base_path.len() + if source_base_path.starts_with("/") { 1 } else { 0 }..]);
         println!("Copying file/directory...:\n    '{from}' -> {}", to_buf.to_str().unwrap());
         let err = copy_file_or_dir_with_prints(psu, &from, &to_buf.to_str().unwrap());
         match err {
