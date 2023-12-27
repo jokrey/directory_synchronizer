@@ -5,7 +5,7 @@ mod ui;
 use std::{env, fs, io};
 use std::process::exit;
 use differences::verify_source_fully_newer_than_target;
-use crate::differences::apply_diffs_source_to_target_with_prints;
+use crate::differences::{apply_diffs_source_to_target_with_prints, apply_during_analysis_with_prints};
 use crate::ui::start_synchronization_ui;
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
     //let args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "ui".to_string()]);
     //let args = Vec::from(["path-to-exe".to_string(), "test-env-dirs/source".to_string(), "test-env-dirs/target".to_string(), "just-do-it".to_string()]);
 
-    if args.len() == 4 && fs::metadata(&args[1]).is_ok_and(|m| m.is_dir()) && fs::metadata(&args[2]).is_ok_and(|m| m.is_dir()) {
+    if args.len() == 4 && &args[1] != &args[2] && fs::metadata(&args[1]).is_ok_and(|m| m.is_dir()) && fs::metadata(&args[2]).is_ok_and(|m| m.is_dir()) {
         println!("Source Path: \"{}\"", args[1]);
         println!("Target Path: \"{}\"", args[2]);
         match args[3].as_str() {
@@ -27,8 +27,8 @@ fn main() {
                 analyze_and_synchronize_with_dialogue(&args[1], &args[2]);
                 return
             }
-            "justdoit" => {
-                analyze_and_synchronize_with_dialogue(&args[1], &args[2]);
+            "just-do-it" => {
+                apply_during_analysis_with_prints(&args[1], &args[2]);
                 return
             }
             &_ => {}
@@ -49,11 +49,6 @@ fn main() {
 }
 
 fn analyze_and_synchronize_with_dialogue(source_path: &String, target_path: &String) {
-    if source_path == target_path {
-        println!("Source Path is the same as Backup Path. Exiting...");
-        exit(0);
-    }
-
     println!("Will now analyse directories and verify that backup directory does not contain any files that\n    \
               are newer than their expression in the source and\n    \
               that backup directory does not contain any files that don't exist in source,\n    \
