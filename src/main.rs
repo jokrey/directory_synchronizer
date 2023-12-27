@@ -42,9 +42,9 @@ fn main() {
     println!("{:?}", &args[1..]);
     println!("\n::HELP::");
     println!("ui: Will start a UI where each differences to be applies can be selected");
-    println!("ui: Will start a command line where each differences and problem is shown and a decision can be made to apply or not");
+    println!("cmd: Will start a command line where each differences and problem is shown and a decision can be made to apply or not");
     println!("just-do-it: Will synchronize the backup directory to the current state of the source directory");
-    println!("Program will NEVER change ANY file in source directory (\"{}\")", args[1]);
+    println!("Program will NEVER change ANY file in source directory (\"{}\")", if args.len() >= 2 {&args[1]} else {""});
     println!("Try again. Exiting...");
 }
 
