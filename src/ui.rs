@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use alignment::Alignment;
+use alignment::{Alignment, Vertical};
 use iced::{Element, Application, Settings, Theme, executor, Command, Length, alignment, Font};
 use iced::widget::{button, checkbox, column, Column, container, row, scrollable, Space, text};
 use iced::widget::scrollable::Properties;
